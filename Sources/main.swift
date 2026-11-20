@@ -7,7 +7,7 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let loginItem = NSMenuItem()
     private var powerSource: CFRunLoopSource?
     private var timer: Timer?
-    private var chargerRefreshTimer: Timer?
+    private var fastRefreshUntil: TimeInterval?
     private var waitingForCharger = false
     private var reading: PowerReading?
 
@@ -26,7 +26,7 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }, Unmanaged.passUnretained(self).toOpaque())?.takeRetainedValue()
 
         if let powerSource {
-            CFRunLoopAddSource(CFRunLoopGetMain(), powerSource, .defaultMode)
+            CFRunLoopAddSource(CFRunLoopGetMain(), powerSource, .commonModes)
         }
         menuNeedsUpdate(menu)
     }
@@ -37,36 +37,24 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         apply(change)
     }
 
-    @objc private func update() {
+    private func update() {
         apply(PowerReading.read())
     }
 
-    private func scheduleChargerRefresh(after delay: TimeInterval) {
-        let refresh = Timer(timeInterval: delay, target: self, selector: #selector(refreshCharger), userInfo: nil, repeats: false)
-        refresh.tolerance = 0.1
-        chargerRefreshTimer = refresh
-        RunLoop.main.add(refresh, forMode: .common)
-    }
-
-    @objc private func refreshCharger() {
-        chargerRefreshTimer = nil
-        let firstRefresh = waitingForCharger
+    @objc private func refresh() {
         waitingForCharger = false
         update()
-        if firstRefresh && reading?.connected == true {
-            scheduleChargerRefresh(after: 2)
-        }
     }
 
     private func apply(_ reading: PowerReading?) {
+        let now = ProcessInfo.processInfo.systemUptime
         if reading?.connected == false {
             waitingForCharger = false
-            chargerRefreshTimer?.invalidate()
-            chargerRefreshTimer = nil
+            fastRefreshUntil = nil
         } else if self.reading?.connected == false && reading?.connected == true {
             // USB-C power telemetry can still reflect the initial connection while PD negotiates.
             waitingForCharger = true
-            scheduleChargerRefresh(after: 1)
+            fastRefreshUntil = now + 30
         }
         self.reading = reading
         let title = waitingForCharger ? "…" : reading?.menuBarTitle ?? "—"
@@ -77,10 +65,17 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if reading?.connected == false && powerSource != nil {
             timer?.invalidate()
             timer = nil
-        } else if timer == nil {
-            timer = Timer.scheduledTimer(timeInterval: 10, target: self, selector: #selector(update), userInfo: nil, repeats: true)
-            timer?.tolerance = 2
+            return
         }
+
+        let interval: TimeInterval = (fastRefreshUntil ?? now) > now ? 1 : 10
+        guard timer?.timeInterval != interval else { return }
+
+        timer?.invalidate()
+        let nextTimer = Timer(timeInterval: interval, target: self, selector: #selector(refresh), userInfo: nil, repeats: true)
+        nextTimer.tolerance = interval == 1 ? 0.1 : 2
+        timer = nextTimer
+        RunLoop.main.add(nextTimer, forMode: .common)
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
