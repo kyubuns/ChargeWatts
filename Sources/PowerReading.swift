@@ -34,12 +34,12 @@ struct PowerReading {
 
     var menuBarTitle: String {
         guard connected else { return "—" }
-        let input = inputWatts.map { String(format: "%.1f", $0) } ?? "—"
-        let maximum = adapter?.maxWatts.map { String(format: "%.0f", $0) } ?? "—"
+        let input = inputWatts.map { String(format: "%.0f", $0.rounded(.down)) } ?? "—"
+        let maximum = adapter?.maxWatts.map { String(format: "%.0f", $0.rounded(.down)) } ?? "—"
         return "\(input) / \(maximum) W"
     }
 
-    static func read() -> PowerReading? {
+    static func read(whenConnectionChangesFrom previous: Bool? = nil) -> PowerReading? {
         let battery = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
         guard battery != IO_OBJECT_NULL else { return nil }
         defer { IOObjectRelease(battery) }
@@ -47,6 +47,7 @@ struct PowerReading {
         guard let connected = IORegistryEntryCreateCFProperty(
             battery, "ExternalConnected" as CFString, kCFAllocatorDefault, 0
         )?.takeRetainedValue() as? Bool else { return nil }
+        if let previous, connected == previous { return nil }
         guard connected else {
             return PowerReading(connected: false, inputWatts: nil, batteryWatts: nil, adapter: nil)
         }

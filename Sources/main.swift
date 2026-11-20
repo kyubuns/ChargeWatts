@@ -26,18 +26,21 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let powerSource {
             CFRunLoopAddSource(CFRunLoopGetMain(), powerSource, .defaultMode)
         }
-        update()
+        menuNeedsUpdate(menu)
     }
 
     private func powerSourceDidChange() {
-        // The timer already handles input changes while the charger is connected.
-        if reading?.connected != true {
-            update()
-        }
+        // Power-source notifications can also report changes unrelated to the charger.
+        guard let change = PowerReading.read(whenConnectionChangesFrom: reading?.connected) else { return }
+        apply(change)
     }
 
     @objc private func update() {
-        reading = PowerReading.read()
+        apply(PowerReading.read())
+    }
+
+    private func apply(_ reading: PowerReading?) {
+        self.reading = reading
         let title = reading?.menuBarTitle ?? "—"
         if statusItem.button?.title != title {
             statusItem.button?.title = title
@@ -66,7 +69,7 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 let name = adapter.name ?? "Unavailable"
                 menu.addItem(withTitle: "Adapter  \(name)", action: nil, keyEquivalent: "")
                 if let maxWatts = adapter.maxWatts {
-                    menu.addItem(withTitle: String(format: "Available maximum  %.0f W", maxWatts), action: nil, keyEquivalent: "")
+                    menu.addItem(withTitle: String(format: "Available maximum  %.1f W", maxWatts), action: nil, keyEquivalent: "")
                 }
                 if let voltage = adapter.voltage, let current = adapter.current {
                     let electricalRating = String(format: "Negotiated  %.3g V · %.3g A", voltage, current)

@@ -1,18 +1,22 @@
 # ChargeWatts
 
-ChargeWatts shows charger input and available maximum power in the macOS menu bar, for example `88.6 / 94 W`. Click to see the adapter name, negotiated voltage and current, and battery charging or discharge rate. The maximum is the wattage macOS reports for the current adapter connection.
+Macのメニューバーに充電器からの入力と利用可能な最大電力を `88 / 94 W` のように表示します。メニューバーでは小数点以下を切り捨てます。最大電力は接続中の充電器についてmacOSが報告する値です。メニューを開くと電力が小数第1位まで表示され、アダプタ名と接続時に決まった電圧・電流も確認できます。
 
-## Power use
+## 省電力の方針
 
-Minimizing battery drain is the top priority. Read power data directly through IOKit and keep routine work off the battery whenever possible. During external power use, sample every 10 seconds with timer tolerance and refresh on demand when opening the menu. On battery, stop periodic sampling and use the macOS power-source notification to resume when external power is connected. If the notification source is unavailable, periodic sampling keeps the display usable. Keep subprocesses and background activity out of the monitoring path. When changing refresh behavior, check CPU use both while plugged in and on battery.
+バッテリーの消費を抑えることを最優先にします。電力データはIOKitから直接読み取り、更新のたびに別のプロセスを起動しません。
 
-## Build and run
+給電中は約10秒ごとに電力を読み取ります。外部電源の抜き差しはmacOSの電源変更通知で検知し、その場で表示を更新します。バッテリー駆動中は定期更新を止めます。通知を受け取れない環境では定期更新を続けます。メニューを開いたときは電源の状態を問わずその場で更新します。
 
-Use an Apple silicon MacBook that exposes power telemetry in IOKit. Building requires the Xcode Command Line Tools.
+更新方法を変えるときは、給電中とバッテリー駆動中の両方でCPU使用率を確認します。
+
+## ビルドと起動
+
+IOKitから電力データを取得できるAppleシリコン搭載のMacBookが対象です。ビルドにはXcodeコマンドラインツールが必要です。
 
 ```sh
 ./build.sh
 open build/ChargeWatts.app
 ```
 
-To launch at login on macOS 13 or later, move the app to Applications and select **Launch at Login** from its menu.
+macOS 13以降でログイン時に起動するには、アプリを「アプリケーション」フォルダに移し、メニューから「Launch at Login」を選びます。
