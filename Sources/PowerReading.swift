@@ -33,13 +33,11 @@ struct PowerReading {
     let adapter: PowerAdapter?
 
     var menuBarTitle: String {
-        guard connected else { return "—" }
-        let input = inputWatts.map { String(format: "%.0f", $0.rounded(.down)) } ?? "—"
-        let maximum = adapter?.maxWatts.map { String(format: "%.0f", $0.rounded(.down)) } ?? "—"
-        return "\(input) / \(maximum) W"
+        guard connected, let maximum = adapter?.maxWatts else { return "—" }
+        return String(format: "%.0fW", maximum.rounded(.down))
     }
 
-    static func read(whenConnectionChangesFrom previous: Bool? = nil) -> PowerReading? {
+    static func read(whenConnectionChangesFrom previous: Bool? = nil, includeTelemetry: Bool = false) -> PowerReading? {
         let battery = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
         guard battery != IO_OBJECT_NULL else { return nil }
         defer { IOObjectRelease(battery) }
@@ -52,9 +50,12 @@ struct PowerReading {
             return PowerReading(connected: false, inputWatts: nil, batteryWatts: nil, adapter: nil)
         }
 
-        let telemetry = IORegistryEntryCreateCFProperty(
-            battery, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0
-        )?.takeRetainedValue() as? [String: NSNumber]
+        var telemetry: [String: NSNumber]?
+        if includeTelemetry {
+            telemetry = IORegistryEntryCreateCFProperty(
+                battery, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0
+            )?.takeRetainedValue() as? [String: NSNumber]
+        }
 
         // Telemetry reports milliwatts. A negative battery reading indicates discharge.
         let input = telemetry?["SystemPowerIn"]?.int64Value

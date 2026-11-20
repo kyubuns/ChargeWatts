@@ -16,7 +16,7 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         statusItem.menu = menu
 
-        statusItem.button?.image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Charger input and maximum power")
+        statusItem.button?.image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Maximum charger power")
         statusItem.button?.imagePosition = .imageLeading
 
         powerSource = IOPSNotificationCreateRunLoopSource({ context in
@@ -28,7 +28,8 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let powerSource {
             CFRunLoopAddSource(CFRunLoopGetMain(), powerSource, .commonModes)
         }
-        menuNeedsUpdate(menu)
+        apply(PowerReading.read())
+        populateMenu(menu)
     }
 
     private func powerSourceDidChange() {
@@ -37,13 +38,9 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         apply(change)
     }
 
-    private func update() {
-        apply(PowerReading.read())
-    }
-
     @objc private func refresh() {
         waitingForCharger = false
-        update()
+        apply(PowerReading.read())
     }
 
     private func apply(_ reading: PowerReading?) {
@@ -54,7 +51,7 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         } else if self.reading?.connected == false && reading?.connected == true {
             // USB-C power telemetry can still reflect the initial connection while PD negotiates.
             waitingForCharger = true
-            fastRefreshUntil = now + 30
+            fastRefreshUntil = now + 5
         }
         self.reading = reading
         let title = waitingForCharger ? "…" : reading?.menuBarTitle ?? "—"
@@ -79,7 +76,11 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        update()
+        apply(PowerReading.read(includeTelemetry: true))
+        populateMenu(menu)
+    }
+
+    private func populateMenu(_ menu: NSMenu) {
         menu.removeAllItems()
 
         if waitingForCharger {
