@@ -7,6 +7,8 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let loginItem = NSMenuItem()
     private var powerSource: CFRunLoopSource?
     private var timer: Timer?
+    private var chargerRefreshTimer: Timer?
+    private var waitingForCharger = false
     private var reading: PowerReading?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -39,9 +41,35 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         apply(PowerReading.read())
     }
 
+    private func scheduleChargerRefresh(after delay: TimeInterval) {
+        let refresh = Timer(timeInterval: delay, target: self, selector: #selector(refreshCharger), userInfo: nil, repeats: false)
+        refresh.tolerance = 0.1
+        chargerRefreshTimer = refresh
+        RunLoop.main.add(refresh, forMode: .common)
+    }
+
+    @objc private func refreshCharger() {
+        chargerRefreshTimer = nil
+        let firstRefresh = waitingForCharger
+        waitingForCharger = false
+        update()
+        if firstRefresh && reading?.connected == true {
+            scheduleChargerRefresh(after: 2)
+        }
+    }
+
     private func apply(_ reading: PowerReading?) {
+        if reading?.connected == false {
+            waitingForCharger = false
+            chargerRefreshTimer?.invalidate()
+            chargerRefreshTimer = nil
+        } else if self.reading?.connected == false && reading?.connected == true {
+            // USB-C power telemetry can still reflect the initial connection while PD negotiates.
+            waitingForCharger = true
+            scheduleChargerRefresh(after: 1)
+        }
         self.reading = reading
-        let title = reading?.menuBarTitle ?? "—"
+        let title = waitingForCharger ? "…" : reading?.menuBarTitle ?? "—"
         if statusItem.button?.title != title {
             statusItem.button?.title = title
         }
@@ -59,7 +87,9 @@ final class WattsApp: NSObject, NSApplicationDelegate, NSMenuDelegate {
         update()
         menu.removeAllItems()
 
-        if reading?.connected == false {
+        if waitingForCharger {
+            menu.addItem(withTitle: "Reading charger power…", action: nil, keyEquivalent: "")
+        } else if reading?.connected == false {
             menu.addItem(withTitle: "No external power", action: nil, keyEquivalent: "")
         } else {
             let input = reading?.inputWatts.map { String(format: "%.1f W", $0) } ?? "Unavailable"
