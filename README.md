@@ -1,8 +1,10 @@
 # ChargeWatts
 
-ChargeWatts shows how much power your Mac is drawing from its charger in the menu bar. Click the wattage to see the input and how much power is going into the battery. When the battery is discharging while plugged in, the menu shows the discharge rate.
+ChargeWatts shows charger input and available maximum power in the macOS menu bar, for example `88.6 / 94 W`. Click to see the adapter name, negotiated voltage and current, and battery charging or discharge rate. The maximum is the wattage macOS reports for the current adapter connection.
 
-ChargeWatts reads the Mac's power telemetry directly through IOKit. It updates every 10 seconds and when you open the menu. It requires neither administrator privileges nor additional apps at runtime.
+## Power use
+
+Minimizing battery drain is the top priority. Read power data directly through IOKit and keep routine work off the battery whenever possible. During external power use, sample every 10 seconds with timer tolerance and refresh on demand when opening the menu. On battery, stop periodic sampling and use the macOS power-source notification to resume when external power is connected. If the notification source is unavailable, periodic sampling keeps the display usable. Keep subprocesses and background activity out of the monitoring path. When changing refresh behavior, check CPU use both while plugged in and on battery.
 
 ## Build and run
 
@@ -12,3 +14,5 @@ Use an Apple silicon MacBook that exposes power telemetry in IOKit. Building req
 ./build.sh
 open build/ChargeWatts.app
 ```
+
+To launch at login on macOS 13 or later, move the app to Applications and select **Launch at Login** from its menu.
